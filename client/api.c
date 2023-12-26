@@ -1,9 +1,13 @@
 #include "api.h"
+
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+
+#define MAX_BUFFER_SIZE 40   // theoretically largest command is 80 chars + 4 for opcode
 
 int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const* server_pipe_path) {
   //TODO: create request and response pipes
@@ -12,14 +16,30 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
     fprintf(stderr, "Failed to open server pipe\n");
     return 1;
   }
-  char buffer[81] = {"\0"};
-  buffer[0] = '1';
-
-  if (write(tx, buffer, 81) == -1) {
-    fprintf(stderr, "Failed to write to server pipe\n");
+  
+  printf("sending setup request %s %s\n", req_pipe_path, resp_pipe_path);
+  int code = 1;
+  if (write(tx, &code, sizeof(int)) != sizeof(int)) {
+    fprintf(stderr, "Failed to send setup request\n");
     return 1;
   }
-  close(server_pipe_path);
+  char buffer[MAX_BUFFER_SIZE] = {0};
+  printf("sending request pipe path\n");
+  strcpy(buffer, req_pipe_path);
+  if (write(tx, buffer, MAX_BUFFER_SIZE) == -1) {
+    fprintf(stderr, "Failed to send request pipe path\n");
+    return 1;
+  }
+
+  memset(buffer, 0, MAX_BUFFER_SIZE);
+  printf("sending response pipe path\n");
+  strcpy(buffer, resp_pipe_path);
+  if (write(tx, buffer, MAX_BUFFER_SIZE) == -1) {
+    fprintf(stderr, "Failed to send response pipe path\n");
+    return 1;
+  }
+
+  close(tx);
   printf("closed server pipe\n");
   return 0;
 }

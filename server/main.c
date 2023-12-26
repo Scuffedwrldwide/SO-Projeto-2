@@ -11,7 +11,7 @@
 #include "operations.h"
 #include "session.h"
 
-#define MAX_BUFFER_SIZE 81 // theoretically largest command is 80 chars + 1 for opcode
+#define MAX_BUFFER_SIZE 40   // theoretically largest command is 80 chars + 4 for opcode
 int main(int argc, char* argv[]) {
   if (argc < 2 || argc > 3) {
     fprintf(stderr, "Usage: %s\n <pipe_path> [delay]\n", argv[0]);
@@ -47,17 +47,42 @@ int main(int argc, char* argv[]) {
   while (1) {
     //TODO: Read from pipe
     int register_fd = open(argv[1], O_RDONLY);
+    int code;
     char buffer[MAX_BUFFER_SIZE];
+    int test = open("test", O_WRONLY);
+
     printf("Waiting for connection request\n");
-    ssize_t bytesRead = read(register_fd, buffer, MAX_BUFFER_SIZE);
+    ssize_t bytesRead = read(register_fd, &code, sizeof(int));
     // Checking for connection request OPCODE
-    if (bytesRead > 0 && strcmp(buffer, "1") == 0) {
-      printf("Connection request received\n");
-      printf("Client pipe path: %s\n", buffer + 1);
-      printf("Server pipe path: %s\n", buffer + 41);
-      close(register_fd);
-      continue;
+    if (bytesRead == -1) {
+      fprintf(stderr, "Failed to read connection request\n");
+      break;
     }
+    printf("Connection request received with code %d\n", code);
+    if (code != 1) {
+      fprintf(stderr, "Invalid connection request\n");
+      break;
+    }
+    write(test, &code, sizeof(int));
+    printf("Connection request received\n");
+    bytesRead = read(register_fd, buffer, MAX_BUFFER_SIZE);
+    if (bytesRead == -1) {
+      fprintf(stderr, "Failed to read request pipe path\n");
+      break;
+    }
+    write(test, buffer, MAX_BUFFER_SIZE);
+    printf("Request pipe path received\n");
+    printf("Request pipe path: %s\n", buffer);
+    bytesRead = read(register_fd, buffer, MAX_BUFFER_SIZE);
+    if (bytesRead == -1) {
+      fprintf(stderr, "Failed to read response pipe path\n");
+      break;
+    }
+    write(test, buffer, MAX_BUFFER_SIZE);
+    printf("Response pipe path received\n");
+    printf("Response pipe path: %s\n", buffer);
+    close(test);
+
     //TODO: Write new client to the producer-consumer buffer
 
   }
