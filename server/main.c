@@ -94,11 +94,12 @@ int main(int argc, char* argv[]) {
     }
     printf("Session created\n");
     sessions[client_count++] = session;
-    if (session_worker(session) == 0) {
-      fprintf(stderr, "Session Concluded\n");
+    if (session_worker(session) != 0) {
+      fprintf(stderr, "Session Error\n");
       break;
     }
-
+    close(register_fd);
+    printf("Session ended\n");
     //TODO: Write new client to the producer-consumer buffer
     
   }
@@ -110,12 +111,27 @@ int main(int argc, char* argv[]) {
 }
 
 int session_worker(struct Session* session) {
+  while (1) {
+        // Check if both named pipes exist
+        if (access(session->requests, F_OK) == 0 && access(session->responses, F_OK) == 0) {
+            printf("Both named pipes exist. Server is ready.\n");
+            break;  // Exit the loop if both pipes are found
+        } else {
+            printf("One or both named pipes do not exist. Server is not ready.\n");
+            // Sleep for a short time and retry
+            sleep(1);
+        }
+    }
 
   int requests = open(session->requests, O_RDONLY);
+  if (requests == -1) {
+    fprintf(stderr, "Failed to open request pipe\n");
+    return 1;
+  }
   int responses = open(session->responses, O_WRONLY);
-
-  if (requests == -1 || responses == -1) {
-    fprintf(stderr, "Failed to open request or response pipe\n");
+  if (responses == -1) {
+    fprintf(stderr, "Failed to open response pipe\n");
+    close(requests);
     return 1;
   }
 
@@ -133,6 +149,8 @@ int session_worker(struct Session* session) {
     switch (opcode) {
       case 2: {
         printf("Quit request received\n");
+        close(requests);
+        close(responses);
         return 0;
       }
       case 3: {
