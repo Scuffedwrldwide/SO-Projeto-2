@@ -27,10 +27,12 @@ int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols);
 int ems_reserve(unsigned int event_id, size_t num_seats, size_t *xs, size_t *ys);
 
 /// Prints the given event.
-/// @param out_fd File descriptor to print the event to.
 /// @param event_id Id of the event to print.
+/// @param num_rows Pointer to number of rows of the event to print.
+/// @param num_cols Pointer to number of columns of the event to print.
+/// @param data Pointer to array of seats of the event to print.
 /// @return 0 if the event was printed successfully, 1 otherwise.
-int ems_show(int out_fd, unsigned int event_id);
+int ems_show(unsigned int event_id, size_t* num_rows, size_t* num_cols, unsigned int** data);
 
 /// Prints all the events.
 /// @param out_fd File descriptor to print the events to.

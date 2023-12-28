@@ -7,6 +7,8 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
+#include "common/io.h"
+
 #define MAX_BUFFER_SIZE 40   // theoretically largest command is 80 chars + 4 for opcode
 
 int req_fd = -1;
@@ -95,6 +97,17 @@ int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols) {
   printf("sending create request\n");
   int code = CREATE;
   write(req_fd, &code, sizeof(int));
+  write(req_fd, &event_id, sizeof(unsigned int));
+  write(req_fd, &num_rows, sizeof(size_t));
+  write(req_fd, &num_cols, sizeof(size_t));
+  read(resp_fd, &code, sizeof(int));
+  if (code == 0) {
+    printf("create successful\n");
+    return 0;
+  } else {
+    printf("create failed\n");
+    return 1;
+  }
   return 1;
 }
 
@@ -103,6 +116,18 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
   printf("sending reserve request\n");
   int code = RESERVE;
   write(req_fd, &code, sizeof(int));
+  write(req_fd, &event_id, sizeof(unsigned int));
+  write(req_fd, &num_seats, sizeof(size_t));
+  write(req_fd, xs, sizeof(size_t) * num_seats);
+  write(req_fd, ys, sizeof(size_t) * num_seats);
+  read(resp_fd, &code, sizeof(int));
+  if (code == 0) {
+    printf("reserve successful\n");
+    return 0;
+  } else {
+    printf("reserve failed\n");
+    return 1;
+  }
   return 1;
 }
 
@@ -110,7 +135,80 @@ int ems_show(int out_fd, unsigned int event_id) {
   //TODO: send show request to the server (through the request pipe) and wait for the response (through the response pipe)
   printf("sending show request\n");
   int code = SHOW;
+  size_t num_rows, num_cols;
+  unsigned int* seats;
   write(req_fd, &code, sizeof(int));
+  write(req_fd, &event_id, sizeof(unsigned int));
+  read(resp_fd, &code, sizeof(int));
+  if (code == 0) {
+    printf("show successful\n");
+    //TODO SAFE READS
+    read(resp_fd, &num_rows, sizeof(size_t));
+    read(resp_fd, &num_cols, sizeof(size_t));
+    seats = malloc(sizeof(unsigned int) * num_rows * num_cols);
+    read(resp_fd, seats, sizeof(unsigned int) * num_rows * num_cols);
+  
+    for (size_t i = 1; i <= num_rows; i++) {
+      for (size_t j = 1; j <= num_cols; j++) {
+        char buffer[16];
+        sprintf(buffer, "%u", seats[(i - 1) * num_cols + (j - 1)]);
+
+        if (print_str(out_fd, buffer)) {
+          perror("Error writing to file descriptor");
+          free(seats);
+          return 1;
+        }
+
+        if (j < num_cols) {
+          if (print_str(out_fd, " ")) {
+            perror("Error writing to file descriptor");
+            free(seats);
+            return 1;
+          }
+        }
+      }
+
+      if (print_str(out_fd, "\n")) {
+        perror("Error writing to file descriptor");
+        free(seats);
+        return 1;
+      }
+    }
+    free(seats);
+    return 0;
+  } else {
+    printf("show failed\n");
+    return 1;
+  }
+
+  /* OLD CODE FROM SERVER
+  for (size_t i = 1; i <= event->rows; i++) {
+    for (size_t j = 1; j <= event->cols; j++) {
+      char buffer[16];
+      sprintf(buffer, "%u", event->data[seat_index(event, i, j)]);
+
+      if (print_str(out_fd, buffer)) {
+        perror("Error writing to file descriptor");
+        pthread_mutex_unlock(&event->mutex);
+        return 1;
+      }
+
+      if (j < event->cols) {
+        if (print_str(out_fd, " ")) {
+          perror("Error writing to file descriptor");
+          pthread_mutex_unlock(&event->mutex);
+          return 1;
+        }
+      }
+    }
+
+    if (print_str(out_fd, "\n")) {
+      perror("Error writing to file descriptor");
+      pthread_mutex_unlock(&event->mutex);
+      return 1;
+    }
+  }
+  */
   return 1;
 }
 

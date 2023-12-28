@@ -115,10 +115,9 @@ int session_worker(struct Session* session) {
         // Check if both named pipes exist
         if (access(session->requests, F_OK) == 0 && access(session->responses, F_OK) == 0) {
             printf("Both named pipes exist. Server is ready.\n");
-            break;  // Exit the loop if both pipes are found
+            break;  
         } else {
             printf("One or both named pipes do not exist. Server is not ready.\n");
-            // Sleep for a short time and retry
             sleep(1);
         }
     }
@@ -155,14 +154,102 @@ int session_worker(struct Session* session) {
       }
       case 3: {
         printf("Create request received\n");
+        unsigned int event_id;
+        size_t num_rows, num_columns;
+        int ret_val;
+        if (read(requests, &event_id, sizeof(unsigned int)) != sizeof(unsigned int)) {
+          fprintf(stderr, "Failed to read event id\n");
+          return 1;
+        }
+        if (read(requests, &num_rows, sizeof(size_t)) != sizeof(size_t)) {
+          fprintf(stderr, "Failed to read num rows\n");
+          return 1;
+        }
+        if (read(requests, &num_columns, sizeof(size_t)) != sizeof(size_t)) {
+          fprintf(stderr, "Failed to read num columns\n");
+          return 1;
+        }
+        ret_val = ems_create(event_id, num_rows, num_columns);
+        if (write(responses, &ret_val, sizeof(int)) != sizeof(int)) {
+          fprintf(stderr, "Failed to write response\n");
+          return 1;
+        }
         break;
       }
       case 4: {
         printf("Reserve request received\n");
+        unsigned int event_id;
+        size_t num_seats;
+        size_t* xs;
+        size_t* ys;
+        int ret_val;
+        if (read(requests, &event_id, sizeof(unsigned int)) != sizeof(unsigned int)) {
+          fprintf(stderr, "Failed to read event id\n");
+          return 1;
+        }
+        if (read(requests, &num_seats, sizeof(size_t)) != sizeof(size_t)) {
+          fprintf(stderr, "Failed to read num seats\n");
+          return 1;
+        }
+        xs = malloc(sizeof(size_t) * num_seats);
+        if (!xs) {
+          fprintf(stderr, "Failed to allocate memory for xs\n");
+          return 1;
+        }
+        ys = malloc(sizeof(size_t) * num_seats);
+        if (!ys) {
+          fprintf(stderr, "Failed to allocate memory for ys\n");
+          return 1;
+        }
+        if (read(requests, xs, sizeof(size_t) * num_seats) != (ssize_t)sizeof(size_t) * num_seats) {
+          fprintf(stderr, "Failed to read xs\n");
+          free(xs);
+          free(ys);
+          return 1;
+        }
+        if (read(requests, ys, sizeof(size_t) * num_seats) != (ssize_t)sizeof(size_t) * num_seats) {
+          fprintf(stderr, "Failed to read ys\n");
+          free(xs);
+          free(ys);
+          return 1;
+        }
+        ret_val = ems_reserve(event_id, num_seats, xs, ys);
+        if (write(responses, &ret_val, sizeof(int)) != sizeof(int)) {
+          fprintf(stderr, "Failed to write response\n");
+          free(xs);
+          free(ys);
+          return 1;
+        }
+        free(xs);
+        free(ys);
         break;
       }
       case 5: {
         printf("Show request received\n");
+        unsigned int event_id;
+        int ret_val;
+        size_t num_rows, num_columns;
+        unsigned int* seats;
+        if (read(requests, &event_id, sizeof(unsigned int)) != sizeof(unsigned int)) {
+          fprintf(stderr, "Failed to read event id\n");
+          return 1;
+        }
+        ret_val = ems_show(event_id, &num_rows, &num_columns, &seats);
+        write(responses, &ret_val, sizeof(int));
+        if (ret_val == 0) {
+          if (write(responses, &num_rows, sizeof(size_t)) != sizeof(size_t)) {
+            fprintf(stderr, "Failed to write num rows\n");
+            return 1;
+          }
+          if (write(responses, &num_columns, sizeof(size_t)) != sizeof(size_t)) {
+            fprintf(stderr, "Failed to write num columns\n");
+            return 1;
+          }
+          if (write(responses, seats, sizeof(unsigned int) * num_rows * num_columns) != sizeof(unsigned int) * num_rows * num_columns) {
+            fprintf(stderr, "Failed to write seats\n");
+            return 1;
+          }
+        }
         break;
       }
       case 6: {
