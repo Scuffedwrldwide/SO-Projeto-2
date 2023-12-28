@@ -12,6 +12,8 @@
 #include "session.h"
 
 #define MAX_BUFFER_SIZE 40   // theoretically largest command is 80 chars + 4 for opcode
+int session_worker(struct Session* session);
+
 int main(int argc, char* argv[]) {
   if (argc < 2 || argc > 3) {
     fprintf(stderr, "Usage: %s\n <pipe_path> [delay]\n", argv[0]);
@@ -43,12 +45,14 @@ int main(int argc, char* argv[]) {
     fprintf(stderr, "Failed to allocate memory for sessions\n");
     return 1;
   }
+  unsigned int client_count = 0;
 
   while (1) {
     //TODO: Read from pipe
     int register_fd = open(argv[1], O_RDONLY);
     int code;
-    char buffer[MAX_BUFFER_SIZE];
+    char req_pipe_path[MAX_BUFFER_SIZE];
+    char resp_pipe_path[MAX_BUFFER_SIZE];
     int test = open("test", O_WRONLY);
 
     printf("Waiting for connection request\n");
@@ -65,30 +69,89 @@ int main(int argc, char* argv[]) {
     }
     write(test, &code, sizeof(int));
     printf("Connection request received\n");
-    bytesRead = read(register_fd, buffer, MAX_BUFFER_SIZE);
+    bytesRead = read(register_fd, req_pipe_path, MAX_BUFFER_SIZE);
     if (bytesRead == -1) {
       fprintf(stderr, "Failed to read request pipe path\n");
       break;
     }
-    write(test, buffer, MAX_BUFFER_SIZE);
+    write(test, req_pipe_path, MAX_BUFFER_SIZE);
     printf("Request pipe path received\n");
-    printf("Request pipe path: %s\n", buffer);
-    bytesRead = read(register_fd, buffer, MAX_BUFFER_SIZE);
-    if (bytesRead == -1) {
+    printf("Request pipe path: %s\n", req_pipe_path);
+    bytesRead = read(register_fd, resp_pipe_path, MAX_BUFFER_SIZE);
+    if (bytesRead == -1) { 
       fprintf(stderr, "Failed to read response pipe path\n");
       break;
     }
-    write(test, buffer, MAX_BUFFER_SIZE);
+    write(test, resp_pipe_path, MAX_BUFFER_SIZE);
     printf("Response pipe path received\n");
-    printf("Response pipe path: %s\n", buffer);
+    printf("Response pipe path: %s\n", resp_pipe_path);
     close(test);
 
-    //TODO: Write new client to the producer-consumer buffer
+    struct Session *session = create_session(client_count, req_pipe_path, resp_pipe_path);
+    if (!session) {
+      fprintf(stderr, "Failed to create session\n");
+      break;
+    }
+    printf("Session created\n");
+    sessions[client_count++] = session;
+    if (session_worker(session) == 0) {
+      fprintf(stderr, "Session Concluded\n");
+      break;
+    }
 
+    //TODO: Write new client to the producer-consumer buffer
+    
   }
 
   //TODO: Close Server
   unlink(argv[1]);
 
   ems_terminate();
+}
+
+int session_worker(struct Session* session) {
+
+  int requests = open(session->requests, O_RDONLY);
+  int responses = open(session->responses, O_WRONLY);
+
+  if (requests == -1 || responses == -1) {
+    fprintf(stderr, "Failed to open request or response pipe\n");
+    return 1;
+  }
+
+  write(responses, &session->id, sizeof(unsigned int));
+  while (1) {
+    //char buffer[MAX_BUFFER_SIZE] = {0};
+    int opcode;
+    ssize_t bytesRead = read(requests, &opcode, sizeof(int));
+    if (bytesRead == -1) {
+      fprintf(stderr, "Failed to read opcode\n");
+      return 1;
+    }
+    printf("Opcode received: %d\n", opcode);
+
+    switch (opcode) {
+      case 2: {
+        printf("Quit request received\n");
+        return 0;
+      }
+      case 3: {
+        printf("Create request received\n");
+        break;
+      }
+      case 4: {
+        printf("Reserve request received\n");
+        break;
+      }
+      case 5: {
+        printf("Show request received\n");
+        break;
+      }
+      case 6: {
+        printf("List request received\n");
+        break;
+      }
+    }
+  }
+
 }
