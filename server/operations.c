@@ -206,7 +206,7 @@ int ems_show(unsigned int event_id, size_t* num_rows, size_t* num_cols, unsigned
   return 0;
 }
 
-int ems_list_events(int out_fd) {
+int ems_list_events(size_t* num_events, unsigned int** event_ids) {
   if (event_list == NULL) {
     fprintf(stderr, "EMS state must be initialized\n");
     return 1;
@@ -219,39 +219,34 @@ int ems_list_events(int out_fd) {
 
   struct ListNode* to = event_list->tail;
   struct ListNode* current = event_list->head;
+  *num_events = 0;
 
   if (current == NULL) {
-    char buff[] = "No events\n";
-    if (print_str(out_fd, buff)) {
-      perror("Error writing to file descriptor");
-      pthread_rwlock_unlock(&event_list->rwl);
-      return 1;
-    }
-
+    *num_events = 0;
     pthread_rwlock_unlock(&event_list->rwl);
     return 0;
   }
 
   while (1) {
-    char buff[] = "Event: ";
-    if (print_str(out_fd, buff)) {
-      perror("Error writing to file descriptor");
-      pthread_rwlock_unlock(&event_list->rwl);
-      return 1;
-    }
-
-    char id[16];
-    sprintf(id, "%u\n", (current->event)->id);
-    if (print_str(out_fd, id)) {
-      perror("Error writing to file descriptor");
-      pthread_rwlock_unlock(&event_list->rwl);
-      return 1;
-    }
-
+    (*num_events)++;
+    printf("num_events: %ld\n", *num_events);
     if (current == to) {
       break;
     }
+    current = current->next;
 
+  }
+
+  *event_ids = malloc(sizeof(unsigned int) * (*num_events));
+  if (*event_ids == NULL) {
+    fprintf(stderr, "Error allocating memory for event id array\n");
+    pthread_rwlock_unlock(&event_list->rwl);
+    return 1;
+  }
+
+  current = event_list->head;
+  for (unsigned int i = 0; i < *num_events; i++) {
+    (*event_ids)[i] = current->event->id;
     current = current->next;
   }
 

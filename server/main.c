@@ -254,6 +254,27 @@ int session_worker(struct Session* session) {
       }
       case 6: {
         printf("List request received\n");
+        int ret_val;
+        size_t num_events;
+        unsigned int* event_ids;
+        ret_val = ems_list_events(&num_events, &event_ids); //This fucntion allocates memory for event_ids
+        write(responses, &ret_val, sizeof(int));
+        if (ret_val == 0) { //If it returns 1 or num_events == 0, then there was no allocation
+          if (write(responses, &num_events, sizeof(size_t)) != sizeof(size_t)) {
+            fprintf(stderr, "Failed to write num events\n");
+            if (event_ids) { free(event_ids);
+              }
+            return 1;
+          }
+          if (write(responses, event_ids, sizeof(unsigned int) * num_events) != sizeof(unsigned int) * num_events) {
+            fprintf(stderr, "Failed to write event ids\n");
+            if (event_ids) { free(event_ids);
+              }
+            return 1;
+          }
+          if (event_ids) { free(event_ids);
+            }
+        }
         break;
       }
     }
