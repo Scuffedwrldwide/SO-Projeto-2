@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <string.h>
+#include <pthread.h>
 
 #include "common/constants.h"
 #include "common/io.h"
@@ -12,7 +13,31 @@
 #include "session.h"
 
 #define MAX_BUFFER_SIZE 40   // theoretically largest command is 80 chars + 4 for opcode
-int session_worker(struct Session* session);
+int session_worker(Session* session);
+
+unsigned int active_sessions = 0;
+
+void *session_thread(void *arg) {
+  SessionQueue* queue = (SessionQueue*)arg;
+  while (1) {
+    Session* session = dequeue_session(queue);
+    if (!session) {
+      fprintf(stderr, "Failed to dequeue session\n");
+      break;
+    }
+    if (session_worker(session) != 0) {
+      fprintf(stderr, "Session Error\n");
+      destroy_session(session);
+      active_sessions--;
+      break;
+    }
+    fprintf(stderr, "Session %d terminated\n", session->id);
+    destroy_session(session);
+    active_sessions--;
+  }
+
+  return NULL;
+}
 
 int main(int argc, char* argv[]) {
   if (argc < 2 || argc > 3) {
@@ -38,14 +63,20 @@ int main(int argc, char* argv[]) {
   }
 
   //TODO: Intialize server, create worker threads
-  mkfifo(argv[1], 0666);
+  mkfifo(argv[1], 0666); // Create named pipe for conection requests
   // Create array of pointers to sessions
-  struct Session** sessions = malloc(sizeof(void *) * 1); // CHANGE THIS TO MAX_SESSIONS
-  if (!sessions) {
-    fprintf(stderr, "Failed to allocate memory for sessions\n");
+  pthread_t worker_threads[MAX_SESSIONS];
+  SessionQueue* queue = create_session_queue();
+  if (!queue) {
+    fprintf(stderr, "Failed to create session queue\n");
     return 1;
   }
-  unsigned int client_count = 0;
+  for (int i = 0; i < MAX_SESSIONS; i++) {
+    if (pthread_create(&worker_threads[i], NULL, session_thread, queue) != 0) {
+      fprintf(stderr, "Failed to create worker thread\n");
+      return 1;
+    }
+  }
 
   while (1) {
     //TODO: Read from pipe
@@ -87,30 +118,33 @@ int main(int argc, char* argv[]) {
     printf("Response pipe path: %s\n", resp_pipe_path);
     close(test);
 
-    struct Session *session = create_session(client_count, req_pipe_path, resp_pipe_path);
+    Session *session = create_session(active_sessions, req_pipe_path, resp_pipe_path);
+    active_sessions++;
     if (!session) {
       fprintf(stderr, "Failed to create session\n");
       break;
     }
     printf("Session created\n");
-    sessions[client_count++] = session;
-    if (session_worker(session) != 0) {
-      fprintf(stderr, "Session Error\n");
+    if (enqueue_session(queue, session) != 0) {
+      fprintf(stderr, "Failed to enqueue session\n");
+      destroy_session(session);
       break;
     }
-    close(register_fd);
-    printf("Session ended\n");
-    //TODO: Write new client to the producer-consumer buffer
-    
   }
 
   //TODO: Close Server
+  for (int i = 0; i < MAX_SESSIONS; i++) {
+    pthread_join(worker_threads[i], NULL);
+  }
+
+  destroy_session_queue(queue);
+
   unlink(argv[1]);
 
   ems_terminate();
 }
 
-int session_worker(struct Session* session) {
+int session_worker(Session* session) {
   while (1) {
         // Check if both named pipes exist
         if (access(session->requests, F_OK) == 0 && access(session->responses, F_OK) == 0) {
