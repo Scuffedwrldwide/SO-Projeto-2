@@ -6,6 +6,8 @@
 #include <sys/stat.h>
 #include <string.h>
 #include <pthread.h>
+#include <signal.h>
+#include <errno.h>
 
 #include "common/constants.h"
 #include "common/io.h"
@@ -16,6 +18,12 @@
 int session_worker(Session* session);
 
 unsigned int active_sessions = 0;
+volatile sig_atomic_t server_running = 1;
+
+// Função de tratamento de sinal
+void sigint_handler(int sign) {
+  server_running = 0;
+}
 
 void *session_thread(void *arg) {
   SessionQueue* queue = (SessionQueue*)arg;
@@ -64,6 +72,13 @@ int main(int argc, char* argv[]) {
 
   //TODO: Intialize server, create worker threads
   mkfifo(argv[1], 0666); // Create named pipe for conection requests
+  if (errno == EEXIST) {
+    fprintf(stderr, "Named pipe already exists.\n");  
+  } 
+  else if (errno != 0) {
+    perror("Error creating named pipe");
+    return 1;
+  }
   // Create array of pointers to sessions
   pthread_t worker_threads[MAX_SESSIONS];
   SessionQueue* queue = create_session_queue();
@@ -78,9 +93,16 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  while (1) {
+  signal(SIGINT, sigint_handler); 
+  signal(SIGPIPE, SIG_IGN);
+
+  while (server_running) {
     //TODO: Read from pipe
     int register_fd = open(argv[1], O_RDONLY);
+    if (register_fd == -1) {
+      perror("Error opening named pipe for reading");
+      break;
+    }
     int code;
     char req_pipe_path[MAX_BUFFER_SIZE];
     char resp_pipe_path[MAX_BUFFER_SIZE];
@@ -145,6 +167,7 @@ int main(int argc, char* argv[]) {
 }
 
 int session_worker(Session* session) {
+  while(server_running){
   while (1) {
         // Check if both named pipes exist
         if (access(session->requests, F_OK) == 0 && access(session->responses, F_OK) == 0) {
@@ -313,5 +336,6 @@ int session_worker(Session* session) {
       }
     }
   }
-
+  return 0;
+  }
 }

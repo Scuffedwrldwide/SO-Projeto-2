@@ -3,6 +3,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <signal.h>
 
 #include "common/io.h"
 #include "eventlist.h"
@@ -31,7 +32,20 @@ static struct Event* get_event_with_delay(unsigned int event_id, struct ListNode
 /// @return Index of the seat.
 static size_t seat_index(struct Event* event, size_t row, size_t col) { return (row - 1) * event->cols + col - 1; }
 
+volatile sig_atomic_t terminate_ems = 0;
+
+// Função de tratamento de sinal
+void sigterm_handler(int sign) {
+  fprintf(stderr, "Received SIGTERM. Terminating...\n");
+  terminate_ems = 1;
+}
+
 int ems_init(unsigned int delay_us) {
+  if (signal(SIGTERM, sigterm_handler) == SIG_ERR) {
+    fprintf(stderr, "Error registering SIGTERM handler\n");
+    return 1;
+  }
+
   if (event_list != NULL) {
     fprintf(stderr, "EMS state has already been initialized\n");
     return 1;
@@ -44,6 +58,10 @@ int ems_init(unsigned int delay_us) {
 }
 
 int ems_terminate() {
+  if(terminate_ems) {
+    return 0;
+  }
+
   if (event_list == NULL) {
     fprintf(stderr, "EMS state must be initialized\n");
     return 1;
