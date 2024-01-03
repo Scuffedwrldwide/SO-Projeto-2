@@ -16,18 +16,34 @@
 
 #define MAX_BUFFER_SIZE 40   // theoretically largest command is 80 chars + 4 for opcode
 int session_worker(Session* session);
+SessionQueue* queue = NULL;
 
 unsigned int active_sessions = 0;
 volatile sig_atomic_t server_running = 1;
+volatile sig_atomic_t list_all = 0; // Flag to trigger list all events
 
-// Função de tratamento de sinal
+// Handler for SIGINT
 void sigint_handler(int sign) {
   server_running = 0;
+  pthread_mutex_lock(&queue->mutex);
+  queue->shutdown = 1;
+  pthread_mutex_unlock(&queue->mutex);
+  pthread_cond_broadcast(&queue->empty);
+  fprintf(stderr, "Received SIGINT. Terminating...\n");
 }
 
-void *session_thread(void *arg) {
-  SessionQueue* queue = (SessionQueue*)arg;
-  while (1) {
+void sigusr1_handler(int sign) {
+  printf("Received SIGUSR1. Listing all events...\n");
+  list_all = 1;
+}
+
+void *session_thread() {
+  //SessionQueue* queue = (SessionQueue*)arg;
+  sigset_t set;
+  sigemptyset(&set);
+  sigaddset(&set, SIGUSR1);
+  pthread_sigmask(SIG_BLOCK, &set, NULL);
+  while (server_running) {
     Session* session = dequeue_session(queue);
     if (!session) {
       fprintf(stderr, "Failed to dequeue session\n");
@@ -48,6 +64,7 @@ void *session_thread(void *arg) {
 }
 
 int main(int argc, char* argv[]) {
+  printf("Server started with PID %d\n", getpid());
   if (argc < 2 || argc > 3) {
     fprintf(stderr, "Usage: %s\n <pipe_path> [delay]\n", argv[0]);
     return 1;
@@ -81,32 +98,39 @@ int main(int argc, char* argv[]) {
   }
   // Create array of pointers to sessions
   pthread_t worker_threads[MAX_SESSIONS];
-  SessionQueue* queue = create_session_queue();
+  queue = create_session_queue();
   if (!queue) {
     fprintf(stderr, "Failed to create session queue\n");
     return 1;
   }
   for (int i = 0; i < MAX_SESSIONS; i++) {
-    if (pthread_create(&worker_threads[i], NULL, session_thread, queue) != 0) {
+    if (pthread_create(&worker_threads[i], NULL, session_thread, NULL) != 0) {
       fprintf(stderr, "Failed to create worker thread\n");
       return 1;
     }
   }
 
   signal(SIGINT, sigint_handler); 
-  signal(SIGPIPE, SIG_IGN);
+  signal(SIGPIPE, SIG_IGN); // Ignore SIGPIPE (good idea???)
+  signal(SIGUSR1, sigusr1_handler);
 
   while (server_running) {
     //TODO: Read from pipe
-    int register_fd = open(argv[1], O_RDONLY);
-    if (register_fd == -1) {
-      perror("Error opening named pipe for reading");
+    int register_fd;
+    while (1) {
+      register_fd = open(argv[1], O_RDONLY);
+      if (register_fd == -1) {
+        if (errno == EINTR) {
+          continue;
+        }
+        fprintf(stderr, "Failed to open named pipe\n");
+        return 1;
+      }
       break;
     }
     int code;
     char req_pipe_path[MAX_BUFFER_SIZE];
     char resp_pipe_path[MAX_BUFFER_SIZE];
-    int test = open("test", O_WRONLY);
 
     printf("Waiting for connection request\n");
     ssize_t bytesRead = read(register_fd, &code, sizeof(int));
@@ -120,14 +144,12 @@ int main(int argc, char* argv[]) {
       fprintf(stderr, "Invalid connection request\n");
       break;
     }
-    write(test, &code, sizeof(int));
     printf("Connection request received\n");
     bytesRead = read(register_fd, req_pipe_path, MAX_BUFFER_SIZE);
     if (bytesRead == -1) {
       fprintf(stderr, "Failed to read request pipe path\n");
       break;
     }
-    write(test, req_pipe_path, MAX_BUFFER_SIZE);
     printf("Request pipe path received\n");
     printf("Request pipe path: %s\n", req_pipe_path);
     bytesRead = read(register_fd, resp_pipe_path, MAX_BUFFER_SIZE);
@@ -135,10 +157,8 @@ int main(int argc, char* argv[]) {
       fprintf(stderr, "Failed to read response pipe path\n");
       break;
     }
-    write(test, resp_pipe_path, MAX_BUFFER_SIZE);
     printf("Response pipe path received\n");
     printf("Response pipe path: %s\n", resp_pipe_path);
-    close(test);
 
     Session *session = create_session(active_sessions, req_pipe_path, resp_pipe_path);
     active_sessions++;
@@ -153,9 +173,10 @@ int main(int argc, char* argv[]) {
       break;
     }
   }
-
+  
   //TODO: Close Server
   for (int i = 0; i < MAX_SESSIONS; i++) {
+    printf("Joining thread %d\n", i);
     pthread_join(worker_threads[i], NULL);
   }
 
@@ -164,11 +185,12 @@ int main(int argc, char* argv[]) {
   unlink(argv[1]);
 
   ems_terminate();
+  return 0;
 }
 
 int session_worker(Session* session) {
-  while(server_running){
-  while (1) {
+
+  while (server_running) {
         // Check if both named pipes exist
         if (access(session->requests, F_OK) == 0 && access(session->responses, F_OK) == 0) {
             printf("Both named pipes exist. Server is ready.\n");
@@ -178,7 +200,7 @@ int session_worker(Session* session) {
             sleep(1);
         }
     }
-
+  printf("thread %d is running\n", session->id);
   int requests = open(session->requests, O_RDONLY);
   if (requests == -1) {
     fprintf(stderr, "Failed to open request pipe\n");
@@ -337,5 +359,4 @@ int session_worker(Session* session) {
     }
   }
   return 0;
-  }
 }

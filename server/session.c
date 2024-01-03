@@ -41,6 +41,7 @@ SessionQueue* create_session_queue() {
   queue->size = 0;
   queue->front = 0;
   queue->rear = -1;
+  queue->shutdown = 0;
   for (int i = 0; i < MAX_SESSIONS; i++) {
     queue->sessions[i] = NULL;
   }
@@ -63,6 +64,10 @@ int enqueue_session(SessionQueue* queue, Session* session) {
   pthread_mutex_lock(&queue->mutex);
   while (queue->size >= MAX_SESSIONS) {
     pthread_cond_wait(&queue->full, &queue->mutex);
+    if (queue->shutdown) {
+      pthread_mutex_unlock(&queue->mutex);
+      return 1;
+    }
   }
   queue->rear = (queue->rear + 1) % MAX_SESSIONS;
   queue->sessions[queue->rear] = session;
@@ -77,11 +82,17 @@ Session* dequeue_session(SessionQueue* queue) {
   pthread_mutex_lock(&queue->mutex);
   while (queue->size <= 0) {
     pthread_cond_wait(&queue->empty, &queue->mutex);
+    // Threads might be waiting on empty when shutdown is called
+    if (queue->shutdown) {
+      pthread_mutex_unlock(&queue->mutex);
+      return NULL;
+    }
   }
   Session* session = queue->sessions[queue->front];
   queue->front = (queue->front + 1) % MAX_SESSIONS;
   queue->size--;
   pthread_cond_signal(&queue->full);
   pthread_mutex_unlock(&queue->mutex);
+  
   return session;
 }

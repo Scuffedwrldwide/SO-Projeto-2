@@ -18,6 +18,7 @@ typedef struct {
   int size;
   int front;
   int rear;
+  int shutdown;
   pthread_mutex_t mutex;
   pthread_cond_t full;
   pthread_cond_t empty;
