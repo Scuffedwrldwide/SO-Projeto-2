@@ -147,6 +147,10 @@ int main(int argc, char* argv[]) {
     printf("Waiting for connection request\n");
     ssize_t bytesRead = read(register_fd, &code, sizeof(int));
     // Checking for connection request OPCODE
+    if (bytesRead == 0) {
+      // Read from pipe a second time before closure, so nothing to do but wait
+      continue;
+    }
     if (bytesRead == -1) {
       fprintf(stderr, "Failed to read connection request\n");
       break;
