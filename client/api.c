@@ -81,7 +81,6 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
 }
 
 int ems_quit(void) { 
-  //TODO: close pipes
   printf("sending quit request\n");
   int code = QUIT;
   write(req_fd, &code, sizeof(int));
