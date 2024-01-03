@@ -36,7 +36,7 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  int out_fd = open(out_path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+  int out_fd = open(out_path, O_WRONLY | O_CREAT | O_TRUNC, 0640);
   if (out_fd == -1) {
     fprintf(stderr, "Failed to open output file. Path: %s\n", out_path);
     return 1;

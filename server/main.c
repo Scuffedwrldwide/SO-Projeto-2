@@ -101,7 +101,7 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  mkfifo(argv[1], 0666); // Create named pipe for connection requests
+  mkfifo(argv[1], 0640); // Create named pipe for connection requests
   if (errno == EEXIST) {
     fprintf(stderr, "Named pipe already exists.\n");  
   } 
@@ -245,27 +245,21 @@ void list_all_info() {
 
 int session_worker(Session* session) {
 
-  while (server_running) {
-    // Check if both named pipes exist
-    if (access(session->requests, F_OK) == 0 && access(session->responses, F_OK) == 0) {
-        printf("Both named pipes exist. Server is ready.\n");
-        break;  
-    } else {
-        printf("One or both named pipes do not exist. Server is not ready.\n");
-        sleep(1);
-    }
-  }
   printf("thread %d is running\n", session->id);
-  int requests = open(session->requests, O_RDONLY);
-  if (requests == -1) {
-    fprintf(stderr, "Failed to open request pipe (%d)\n", session->id);
-    return 1;
-  }
-  int responses = open(session->responses, O_WRONLY);
-  if (responses == -1) {
-    fprintf(stderr, "Failed to open response pipe (%d)\n", session->id);
-    close(requests);
-    return 1;
+  int requests;
+  int responses;
+  for (int i = 0; i < 3; i++) {
+    requests = open(session->requests, O_RDONLY);
+    responses = open(session->responses, O_WRONLY);
+    if (requests == -1 || responses == -1) {
+      if (errno == EINTR || errno == ENOENT) {
+        fprintf(stderr, "Couldn't open client pipes. Retrying...\n");
+        continue; // Retry or terminate via signal
+      }
+      fprintf(stderr, "Failed to open request pipe\n");
+      return 1;
+    }
+    break;
   }
 
   write(responses, &session->id, sizeof(unsigned int));

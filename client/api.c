@@ -58,8 +58,8 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
 
   close(tx);
   printf("closed server pipe\n");
-  mkfifo(req_pipe_path, 0666);
-  mkfifo(resp_pipe_path, 0666);
+  mkfifo(req_pipe_path, 0640);
+  mkfifo(resp_pipe_path, 0640);
   if (req_fd != -1 || resp_fd != -1) {
     fprintf(stderr, "Request or response pipe already open\n");
     return 1;
