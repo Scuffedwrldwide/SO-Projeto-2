@@ -26,7 +26,7 @@ int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols);
 /// @return 0 if the reservation was created successfully, 1 otherwise.
 int ems_reserve(unsigned int event_id, size_t num_seats, size_t *xs, size_t *ys);
 
-/// Prepares information about given event.
+/// Prepares information about given event. This list must NOT be freed by the caller.
 /// @param event_id Id of the event to print.
 /// @param num_rows Pointer to number of rows of the event to print.
 /// @param num_cols Pointer to number of columns of the event to print.
@@ -34,10 +34,11 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t *xs, size_t *ys)
 /// @return 0 if the event was printed successfully, 1 otherwise.
 int ems_show(unsigned int event_id, size_t* num_rows, size_t* num_cols, unsigned int** data);
 
-/// Prepares a list of all the events.
+/// Prepares a list of all the events. This list MUST be freed by the caller.
 /// @param num_events Pointer to number of events.
 /// @param event_ids Pointer to array of event ids.
 /// @return 0 if the events were printed successfully, 1 otherwise.
+/// @warning event_ids MUST be freed by the caller.
 int ems_list_events(size_t* num_events, unsigned int** event_ids);
 
 #endif  // SERVER_OPERATIONS_H

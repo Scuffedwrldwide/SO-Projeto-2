@@ -16,6 +16,7 @@
 
 #define MAX_BUFFER_SIZE 40   // theoretically largest command is 80 chars + 4 for opcode
 int session_worker(Session* session);
+void list_all_info();
 SessionQueue* queue = NULL;
 
 unsigned int active_sessions = 0;
@@ -59,7 +60,7 @@ void *session_thread() {
     destroy_session(session);
     active_sessions--;
   }
-
+  printf("Thread terminating\n");
   return NULL;
 }
 
@@ -114,14 +115,17 @@ int main(int argc, char* argv[]) {
   signal(SIGPIPE, SIG_IGN); // Ignore SIGPIPE (good idea???)
   signal(SIGUSR1, sigusr1_handler);
 
+  int register_fd;
   while (server_running) {
-    //TODO: Read from pipe
-    int register_fd;
-    while (1) {
+    if (list_all) list_all_info();
+
+    while (server_running) {
       register_fd = open(argv[1], O_RDONLY);
       if (register_fd == -1) {
         if (errno == EINTR) {
-          continue;
+          printf("Interrupted by signal\n");
+          if (list_all) list_all_info();
+          continue; // Retry or terminate via signal
         }
         fprintf(stderr, "Failed to open named pipe\n");
         return 1;
@@ -172,20 +176,45 @@ int main(int argc, char* argv[]) {
       destroy_session(session);
       break;
     }
+    close(register_fd);
   }
-  
+  close(register_fd);
+  printf("Server terminating\n");
   //TODO: Close Server
   for (int i = 0; i < MAX_SESSIONS; i++) {
     printf("Joining thread %d\n", i);
     pthread_join(worker_threads[i], NULL);
   }
-
   destroy_session_queue(queue);
-
   unlink(argv[1]);
-
   ems_terminate();
   return 0;
+}
+
+void list_all_info() {
+  printf("Listing all events...\n");
+  size_t num_events, num_rows, num_cols;
+  unsigned int *event_ids, *data;
+  int ret_val = ems_list_events(&num_events, &event_ids);
+  if (ret_val == 0 && num_events > 0) {
+    printf("Displaying all event information...\n");
+    printf("Number of events: %zu\n", num_events);
+    for (size_t i = 0; i < num_events; i++) {
+      printf("Event ID: %u\n", event_ids[i]);
+      ems_show(event_ids[i], &num_rows, &num_cols, &data);
+      for (size_t j = 0; j < num_rows; j++) {
+        for (size_t k = 0; k < num_cols; k++) {
+          printf("%d", data[(j) * num_cols + (k)]);
+          if(k < num_cols - 1) printf(" ");
+        }
+        printf("\n");
+      }
+      printf("\n");
+    }
+    free(event_ids);
+  }
+  signal(SIGUSR1, sigusr1_handler);
+  list_all = 0;
 }
 
 int session_worker(Session* session) {

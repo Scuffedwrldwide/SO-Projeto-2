@@ -132,7 +132,6 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
 }
 
 int ems_show(int out_fd, unsigned int event_id) {
-  //TODO: send show request to the server (through the request pipe) and wait for the response (through the response pipe)
   printf("sending show request\n");
   int code = SHOW;
   size_t num_rows, num_cols;
@@ -141,7 +140,6 @@ int ems_show(int out_fd, unsigned int event_id) {
   write(req_fd, &event_id, sizeof(unsigned int));
   read(resp_fd, &code, sizeof(int));
   if (code == 0) {
-    printf("show successful\n");
     //TODO SAFE READS
     read(resp_fd, &num_rows, sizeof(size_t));
     read(resp_fd, &num_cols, sizeof(size_t));

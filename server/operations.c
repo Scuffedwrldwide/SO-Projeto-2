@@ -247,7 +247,7 @@ int ems_list_events(size_t* num_events, unsigned int** event_ids) {
 
   while (1) {
     (*num_events)++;
-    printf("num_events: %ld\n", *num_events);
+    //printf("num_events: %ld\n", *num_events);
     if (current == to) {
       break;
     }
