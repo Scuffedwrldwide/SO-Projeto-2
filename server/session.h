@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <pthread.h>
 
-#define MAX_SESSIONS 2
+#define MAX_SESSIONS 8
 
 typedef struct {
   unsigned int id;

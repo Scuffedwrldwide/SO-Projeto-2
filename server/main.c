@@ -54,7 +54,7 @@ void *session_thread(void* arg) {
   while (server_running) {
     Session* session = dequeue_session(queue);
     if (!session) {
-      fprintf(stderr, "Failed to dequeue session\n");
+      if(server_running == 1) {fprintf(stderr, "Failed to dequeue session\n");}
       break;
     }
     if (session_worker(session) != 0) {
@@ -190,7 +190,7 @@ int main(int argc, char* argv[]) {
     close(register_fd);
   }
   close(register_fd);
-  printf("\nServer terminating\n");
+  printf("\nServer terminating.\n");
   
   // Wait for all worker threads to terminate
   for (int i = 0; i < MAX_SESSIONS; i++) {
