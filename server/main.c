@@ -14,11 +14,10 @@
 #include "operations.h"
 #include "session.h"
 
-#define MAX_BUFFER_SIZE 40   // theoretically largest command is 80 chars + 4 for opcode
 int session_worker(Session* session);
 void list_all_info();
-SessionQueue* queue = NULL;
 
+SessionQueue* queue = NULL;
 unsigned int active_sessions = 0;
 volatile sig_atomic_t server_running = 1;
 volatile sig_atomic_t list_all = 0; // Flag to trigger list all events
@@ -46,36 +45,25 @@ void sigusr1_handler(int sign) {
   list_all = 1;
 }
 
-
-
 void *session_thread(void* arg) {
-  //SessionQueue* queue = (SessionQueue*)arg;
-  int id = (*(int*)arg);
+  (void)arg;
   sigset_t set;
   sigemptyset(&set);
   sigaddset(&set, SIGUSR1);
   pthread_sigmask(SIG_BLOCK, &set, NULL);
   while (server_running) {
-    printf("Thread %d waiting for session\n", id);
     Session* session = dequeue_session(queue);
     if (!session) {
       fprintf(stderr, "Failed to dequeue session\n");
       break;
     }
-    printf("Thread %d got session %d\n", id, session->id);
     if (session_worker(session) != 0) {
       fprintf(stderr, "Session Error\n");
-      destroy_session(session);
-      active_sessions--;
-      printf("Active sessions: %d\n", active_sessions);
-      continue;
     }
-    fprintf(stderr, "Session %d terminated\n", session->id);
+    fprintf(stderr, "Session %d terminated.\n", session->id);
     destroy_session(session);
     active_sessions--;
-    printf("Active sessions: %d\n", active_sessions);
   }
-  printf("Thread terminating\n");
   return NULL;
 }
 
@@ -119,9 +107,7 @@ int main(int argc, char* argv[]) {
     return 1;
   }
   for (int i = 0; i < MAX_SESSIONS; i++) {
-    int id = i;
-    int create = pthread_create(&worker_threads[i], NULL, session_thread, &id);
-    sleep(1);
+    int create = pthread_create(&worker_threads[i], NULL, session_thread, NULL);
     if (create != 0) {
       fprintf(stderr, "Failed to create worker thread\n");
       return 1;
@@ -129,7 +115,7 @@ int main(int argc, char* argv[]) {
   }
 
   signal(SIGINT, sigint_handler); 
-  signal(SIGPIPE, SIG_IGN); // Ignore SIGPIPE (good idea???)
+  signal(SIGPIPE, SIG_IGN); // Ignore SIGPIPE
   signal(SIGUSR1, sigusr1_handler);
 
   int register_fd;
@@ -153,16 +139,17 @@ int main(int argc, char* argv[]) {
     int code = 0;
     char req_pipe_path[MAX_BUFFER_SIZE] = {0};
     char resp_pipe_path[MAX_BUFFER_SIZE] = {0};
-
-    printf("Waiting for connection request\n");
+    printf("Waiting for connection request...\n");
     ssize_t bytesRead = read(register_fd, &code, sizeof(int));
-    printf("%ld\n", bytesRead);
     // Checking for connection request OPCODE
     if (bytesRead == 0) {
       // Read from pipe a second time before closure, so nothing to do but wait
       continue;
     }
     if (bytesRead == -1) {
+      if (errno == EINTR){ // since reading call is blocking, USR1 might interrupt
+        continue;
+      }
       fprintf(stderr, "Failed to read connection request\n");
       break;
     }
@@ -171,33 +158,28 @@ int main(int argc, char* argv[]) {
       fprintf(stderr, "Invalid connection request\n");
       continue; 
     } 
-    printf("Connection request received\n");
     bytesRead = read(register_fd, req_pipe_path, MAX_BUFFER_SIZE);
-    printf("%ld\n", bytesRead);
     if (bytesRead == -1) {
       fprintf(stderr, "Failed to read request pipe path\n");
       break;
     }
-    printf("Request pipe path received\n");
     printf("Request pipe path: %s\n", req_pipe_path);
     bytesRead = read(register_fd, resp_pipe_path, MAX_BUFFER_SIZE);
     if (bytesRead == -1) { 
       fprintf(stderr, "Failed to read response pipe path\n");
       break;
     }
-    printf("Response pipe path received\n");
     printf("Response pipe path: %s\n", resp_pipe_path);
     //Creates session
     Session *session = create_session(active_sessions, req_pipe_path, resp_pipe_path);
     active_sessions++;
-    printf("Active sessions: %d\n", active_sessions);
     if (!session) {
       fprintf(stderr, "Failed to create session\n");
       break;
     }
     printf("Session %d created", session->id);
-    if (active_sessions > MAX_SESSIONS) { printf(". Waiting for earlier sessions to finish");}
-    printf("\n");
+    if (active_sessions > MAX_SESSIONS) { printf(". Waiting for earlier sessions to finish...");}
+    printf("\n\n");
     //Queues session
     if (enqueue_session(queue, session) != 0) {
       fprintf(stderr, "Failed to enqueue session\n");
@@ -208,11 +190,10 @@ int main(int argc, char* argv[]) {
     close(register_fd);
   }
   close(register_fd);
-  printf("Server terminating\n");
+  printf("\nServer terminating\n");
   
   // Wait for all worker threads to terminate
   for (int i = 0; i < MAX_SESSIONS; i++) {
-    printf("Joining thread %d\n", i);
     pthread_join(worker_threads[i], NULL);
   }
   destroy_session_queue(queue);
@@ -222,7 +203,6 @@ int main(int argc, char* argv[]) {
 }
 
 void list_all_info() {
-  printf("Listing all events...\n");
   size_t num_events, num_rows, num_cols;
   unsigned int *event_ids, *data;
   int ret_val = ems_list_events(&num_events, &event_ids);
@@ -249,7 +229,6 @@ void list_all_info() {
 
 int session_worker(Session* session) {
 
-  printf("thread %d is running\n", session->id);
   int requests;
   int responses;
   responses = open(session->responses, O_WRONLY);
@@ -267,23 +246,19 @@ int session_worker(Session* session) {
   while (server_running) {
     //char buffer[MAX_BUFFER_SIZE] = {0};
     int opcode;
-    printf("Reading opcode (%d)\n", session->id);
     ssize_t bytesRead = read(requests, &opcode, sizeof(int));
     if (bytesRead == -1 || opcode < 2) {
       fprintf(stderr, "Failed to read opcode (%d)\n", session->id);
       return 1;
     }
-    printf("Opcode received: %d (%d)\n", opcode, session->id);
 
     switch (opcode) {
       case 2: {
-        printf("Quit request received (%d)\n", session->id);
         close(requests);
         close(responses);
         return 0;
       }
       case 3: {
-        printf("Create request received (%d)\n", session->id);
         unsigned int event_id;
         size_t num_rows, num_columns;
         int ret_val;
@@ -304,11 +279,9 @@ int session_worker(Session* session) {
           fprintf(stderr, "Failed to write response (%d)\n", session->id);
           return 1;
         }
-        printf("Create response sent (%d)\n", session->id);
         break;
       }
       case 4: {
-        printf("Reserve request received (%d)\n", session->id);
         unsigned int event_id;
         size_t num_seats;
         size_t* xs;
@@ -370,7 +343,6 @@ int session_worker(Session* session) {
         break;
       }
       case 5: {
-        printf("Show request received (%d)\n", session->id);
         unsigned int event_id;
         int ret_val;
         size_t num_rows, num_columns;
@@ -406,7 +378,6 @@ int session_worker(Session* session) {
         break;
       }
       case 6: {
-        printf("List request received (%d)\n", session->id);
         int ret_val;
         size_t num_events;
         unsigned int* event_ids;

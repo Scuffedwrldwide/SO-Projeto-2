@@ -57,12 +57,19 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
   close(tx);
 
   resp_fd = open(resp_pipe_path, O_RDONLY);
+  if (resp_fd == -1) {
+    fprintf(stderr, "Failed to open response pipe\n");
+    return 1;
+  }
 
   read(resp_fd, &id, sizeof(unsigned int));
 
   req_fd = open(req_pipe_path, O_WRONLY);
+  if (resp_fd == -1) {
+    fprintf(stderr, "Failed to open response pipe\n");
+    return 1;
+  }
 
-  
   req_pipe = req_pipe_path;
   resp_pipe = resp_pipe_path;
   printf("Got id %u\n", id);
