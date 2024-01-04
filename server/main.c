@@ -116,7 +116,7 @@ int main(int argc, char* argv[]) {
   }
 
   signal(SIGINT, sigint_handler);
-  signal(SIGPIPE, SIG_IGN);  // Ignore SIGPIPE
+  signal(SIGPIPE, SIG_IGN);  // Ignore SIGPIPE for client disconnect handling
   signal(SIGUSR1, sigusr1_handler);
 
   int register_fd;
