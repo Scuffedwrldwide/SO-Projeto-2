@@ -46,6 +46,8 @@ void sigusr1_handler(int sign) {
   list_all = 1;
 }
 
+
+
 void *session_thread(void* arg) {
   //SessionQueue* queue = (SessionQueue*)arg;
   int id = (*(int*)arg);
@@ -154,6 +156,7 @@ int main(int argc, char* argv[]) {
 
     printf("Waiting for connection request\n");
     ssize_t bytesRead = read(register_fd, &code, sizeof(int));
+    printf("%ld\n", bytesRead);
     // Checking for connection request OPCODE
     if (bytesRead == 0) {
       // Read from pipe a second time before closure, so nothing to do but wait
@@ -167,9 +170,10 @@ int main(int argc, char* argv[]) {
     if (code != 1) {
       fprintf(stderr, "Invalid connection request\n");
       continue; 
-    }
+    } 
     printf("Connection request received\n");
     bytesRead = read(register_fd, req_pipe_path, MAX_BUFFER_SIZE);
+    printf("%ld\n", bytesRead);
     if (bytesRead == -1) {
       fprintf(stderr, "Failed to read request pipe path\n");
       break;
@@ -248,21 +252,18 @@ int session_worker(Session* session) {
   printf("thread %d is running\n", session->id);
   int requests;
   int responses;
-  for (int i = 0; i < 3; i++) {
-    requests = open(session->requests, O_RDONLY);
-    responses = open(session->responses, O_WRONLY);
-    if (requests == -1 || responses == -1) {
-      if (errno == EINTR || errno == ENOENT) {
-        fprintf(stderr, "Couldn't open client pipes. Retrying...\n");
-        continue; // Retry or terminate via signal
-      }
-      fprintf(stderr, "Failed to open request pipe\n");
-      return 1;
-    }
-    break;
+  responses = open(session->responses, O_WRONLY);
+  if (responses == -1) {
+    fprintf(stderr, "Failed to open response pipe\n");
+    return 1;
+  }
+  write(responses, &session->id, sizeof(unsigned int));
+  requests = open(session->requests, O_RDONLY);
+  if (requests == -1) {
+    fprintf(stderr, "Failed to open request pipe\n");
+    return 1;
   }
 
-  write(responses, &session->id, sizeof(unsigned int));
   while (server_running) {
     //char buffer[MAX_BUFFER_SIZE] = {0};
     int opcode;
