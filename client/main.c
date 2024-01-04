@@ -84,13 +84,13 @@ int main(int argc, char* argv[]) {
 
       case CMD_WAIT:
         if (parse_wait(in_fd, &delay, NULL) == -1) {
-            fprintf(stderr, "Invalid command. See HELP for usage\n");
-            continue;
+          fprintf(stderr, "Invalid command. See HELP for usage\n");
+          continue;
         }
 
         if (delay > 0) {
-            printf("Waiting...\n");
-            sleep(delay);
+          printf("Waiting...\n");
+          sleep(delay);
         }
         break;
 

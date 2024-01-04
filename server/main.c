@@ -1,13 +1,13 @@
-#include <limits.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
+#include <errno.h>
 #include <fcntl.h>
-#include <sys/stat.h>
-#include <string.h>
+#include <limits.h>
 #include <pthread.h>
 #include <signal.h>
-#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "common/constants.h"
 #include "common/io.h"
@@ -20,11 +20,11 @@ void list_all_info();
 SessionQueue* queue = NULL;
 unsigned int active_sessions = 0;
 volatile sig_atomic_t server_running = 1;
-volatile sig_atomic_t list_all = 0; // Flag to trigger list all events
+volatile sig_atomic_t list_all = 0;  // Flag to trigger list all events
 
 // Handler for SIGINT
 void sigint_handler(int sign) {
-  if(sign != SIGINT) {
+  if (sign != SIGINT) {
     fprintf(stderr, "Received unexpected signal %d\n", sign);
     return;
   }
@@ -37,7 +37,7 @@ void sigint_handler(int sign) {
 }
 // Handler for SIGUSR1
 void sigusr1_handler(int sign) {
-  if(sign != SIGUSR1) {
+  if (sign != SIGUSR1) {
     fprintf(stderr, "Received unexpected signal %d\n", sign);
     return;
   }
@@ -45,7 +45,7 @@ void sigusr1_handler(int sign) {
   list_all = 1;
 }
 
-void *session_thread(void* arg) {
+void* session_thread(void* arg) {
   (void)arg;
   sigset_t set;
   sigemptyset(&set);
@@ -54,7 +54,9 @@ void *session_thread(void* arg) {
   while (server_running) {
     Session* session = dequeue_session(queue);
     if (!session) {
-      if(server_running == 1) {fprintf(stderr, "Failed to dequeue session\n");}
+      if (server_running == 1) {
+        fprintf(stderr, "Failed to dequeue session\n");
+      }
       break;
     }
     if (session_worker(session) != 0) {
@@ -78,7 +80,7 @@ int main(int argc, char* argv[]) {
   unsigned int state_access_delay_us = STATE_ACCESS_DELAY_US;
   if (argc == 3) {
     unsigned long int delay = strtoul(argv[2], &endptr, 10);
-    
+
     if (*endptr != '\0' || delay > UINT_MAX) {
       fprintf(stderr, "Invalid delay value or value too large\n");
       return 1;
@@ -91,11 +93,10 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  mkfifo(argv[1], 0640); // Create named pipe for connection requests
+  mkfifo(argv[1], 0640);  // Create named pipe for connection requests
   if (errno == EEXIST) {
-    fprintf(stderr, "Named pipe already exists.\n");  
-  } 
-  else if (errno != 0) {
+    fprintf(stderr, "Named pipe already exists.\n");
+  } else if (errno != 0) {
     perror("Error creating named pipe");
     return 1;
   }
@@ -114,8 +115,8 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  signal(SIGINT, sigint_handler); 
-  signal(SIGPIPE, SIG_IGN); // Ignore SIGPIPE
+  signal(SIGINT, sigint_handler);
+  signal(SIGPIPE, SIG_IGN);  // Ignore SIGPIPE
   signal(SIGUSR1, sigusr1_handler);
 
   int register_fd;
@@ -128,14 +129,14 @@ int main(int argc, char* argv[]) {
         if (errno == EINTR) {
           printf("Interrupted by signal\n");
           if (list_all) list_all_info();
-          continue; // Retry or terminate via signal
+          continue;  // Retry or terminate via signal
         }
         fprintf(stderr, "Failed to open named pipe\n");
         return 1;
       }
       break;
     }
-    //Process connection request
+    // Process connection request
     int code = 0;
     char req_pipe_path[MAX_BUFFER_SIZE] = {0};
     char resp_pipe_path[MAX_BUFFER_SIZE] = {0};
@@ -147,7 +148,7 @@ int main(int argc, char* argv[]) {
       continue;
     }
     if (bytesRead == -1) {
-      if (errno == EINTR){ // since reading call is blocking, USR1 might interrupt
+      if (errno == EINTR) {  // since reading call is blocking, USR1 might interrupt
         continue;
       }
       fprintf(stderr, "Failed to read connection request\n");
@@ -156,8 +157,8 @@ int main(int argc, char* argv[]) {
     printf("Connection request received with code %d. %d connections already active\n", code, active_sessions);
     if (code != 1) {
       fprintf(stderr, "Invalid connection request\n");
-      continue; 
-    } 
+      continue;
+    }
     bytesRead = read(register_fd, req_pipe_path, MAX_BUFFER_SIZE);
     if (bytesRead == -1) {
       fprintf(stderr, "Failed to read request pipe path\n");
@@ -165,22 +166,24 @@ int main(int argc, char* argv[]) {
     }
     printf("Request pipe path: %s\n", req_pipe_path);
     bytesRead = read(register_fd, resp_pipe_path, MAX_BUFFER_SIZE);
-    if (bytesRead == -1) { 
+    if (bytesRead == -1) {
       fprintf(stderr, "Failed to read response pipe path\n");
       break;
     }
     printf("Response pipe path: %s\n", resp_pipe_path);
-    //Creates session
-    Session *session = create_session(active_sessions, req_pipe_path, resp_pipe_path);
+    // Creates session
+    Session* session = create_session(active_sessions, req_pipe_path, resp_pipe_path);
     active_sessions++;
     if (!session) {
       fprintf(stderr, "Failed to create session\n");
       break;
     }
     printf("Session %d created", session->id);
-    if (active_sessions > MAX_SESSIONS) { printf(". Waiting for earlier sessions to finish...");}
+    if (active_sessions > MAX_SESSIONS) {
+      printf(". Waiting for earlier sessions to finish...");
+    }
     printf("\n\n");
-    //Queues session
+    // Queues session
     if (enqueue_session(queue, session) != 0) {
       fprintf(stderr, "Failed to enqueue session\n");
       destroy_session(session);
@@ -191,7 +194,7 @@ int main(int argc, char* argv[]) {
   }
   close(register_fd);
   printf("\nServer terminating.\n");
-  
+
   // Wait for all worker threads to terminate
   for (int i = 0; i < MAX_SESSIONS; i++) {
     pthread_join(worker_threads[i], NULL);
@@ -214,8 +217,8 @@ void list_all_info() {
       ems_show(event_ids[i], &num_rows, &num_cols, &data);
       for (size_t j = 0; j < num_rows; j++) {
         for (size_t k = 0; k < num_cols; k++) {
-          printf("%d", data[(j) * num_cols + (k)]);
-          if(k < num_cols - 1) printf(" ");
+          printf("%d", data[(j)*num_cols + (k)]);
+          if (k < num_cols - 1) printf(" ");
         }
         printf("\n");
       }
@@ -228,7 +231,6 @@ void list_all_info() {
 }
 
 int session_worker(Session* session) {
-
   int requests;
   int responses;
   responses = open(session->responses, O_WRONLY);
@@ -244,7 +246,7 @@ int session_worker(Session* session) {
   }
 
   while (server_running) {
-    //char buffer[MAX_BUFFER_SIZE] = {0};
+    // char buffer[MAX_BUFFER_SIZE] = {0};
     int opcode;
     ssize_t bytesRead = read(requests, &opcode, sizeof(int));
     if (bytesRead == -1 || opcode < 2) {
@@ -368,11 +370,12 @@ int session_worker(Session* session) {
             close(responses);
             return 1;
           }
-          if (write(responses, seats, sizeof(unsigned int) * num_rows * num_columns) != (ssize_t)(sizeof(unsigned int) * num_rows * num_columns)) {
+          if (write(responses, seats, sizeof(unsigned int) * num_rows * num_columns) !=
+              (ssize_t)(sizeof(unsigned int) * num_rows * num_columns)) {
             fprintf(stderr, "Failed to write seats (%d)\n", session->id);
             close(requests);
             close(responses);
-            return 1; 
+            return 1;
           }
         }
         break;
@@ -381,27 +384,31 @@ int session_worker(Session* session) {
         int ret_val;
         size_t num_events;
         unsigned int* event_ids;
-        ret_val = ems_list_events(&num_events, &event_ids); //This function allocates memory for event_ids
+        ret_val = ems_list_events(&num_events, &event_ids);  // This function allocates memory for event_ids
         write(responses, &ret_val, sizeof(int));
-        if (ret_val == 0) { //If it returns 1 or num_events == 0, then there was no allocation
+        if (ret_val == 0) {  // If it returns 1 or num_events == 0, then there was no allocation
           if (write(responses, &num_events, sizeof(size_t)) != sizeof(size_t)) {
             fprintf(stderr, "Failed to write num events (%d)\n", session->id);
-            if (event_ids) { free(event_ids);
-              }
+            if (event_ids) {
+              free(event_ids);
+            }
             close(requests);
             close(responses);
             return 1;
           }
-          if (write(responses, event_ids, sizeof(unsigned int) * num_events) != (ssize_t)(sizeof(unsigned int) * num_events)) {
+          if (write(responses, event_ids, sizeof(unsigned int) * num_events) !=
+              (ssize_t)(sizeof(unsigned int) * num_events)) {
             fprintf(stderr, "Failed to write event ids (%d)\n", session->id);
-            if (event_ids) { free(event_ids);
-              }
+            if (event_ids) {
+              free(event_ids);
+            }
             close(requests);
             close(responses);
-            return 1; 
+            return 1;
           }
-          if (event_ids) { free(event_ids);
-            }
+          if (event_ids) {
+            free(event_ids);
+          }
         }
         break;
       }

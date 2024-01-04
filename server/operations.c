@@ -1,9 +1,9 @@
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
-#include <signal.h>
 
 #include "common/io.h"
 #include "eventlist.h"
@@ -36,7 +36,7 @@ volatile sig_atomic_t terminate_ems = 0;
 
 // Handles SIGTERM
 void sigterm_handler(int sign) {
-  if(sign != SIGTERM) {
+  if (sign != SIGTERM) {
     fprintf(stderr, "Received unexpected signal %d\n", sign);
     return;
   }
@@ -62,7 +62,7 @@ int ems_init(unsigned int delay_us) {
 }
 
 int ems_terminate() {
-  if(terminate_ems) {
+  if (terminate_ems) {
     return 0;
   }
 
@@ -251,12 +251,11 @@ int ems_list_events(size_t* num_events, unsigned int** event_ids) {
 
   while (1) {
     (*num_events)++;
-    //printf("num_events: %ld\n", *num_events);
+    // printf("num_events: %ld\n", *num_events);
     if (current == to) {
       break;
     }
     current = current->next;
-
   }
 
   *event_ids = malloc(sizeof(unsigned int) * (*num_events));

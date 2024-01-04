@@ -1,15 +1,15 @@
 #include "session.h"
 
+#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h>
 
 Session* create_session(unsigned int session_id, char* requests, char* responses) {
   Session* session = (Session*)malloc(sizeof(Session));
   if (!session) return NULL;
-  session->requests = malloc(40*sizeof(char) + 1);
-  session->responses = malloc(40*sizeof(char) + 1);
-  if (!session->requests || !session->responses) { // FIXME if alloc fails, might be freeing NULL
+  session->requests = malloc(40 * sizeof(char) + 1);
+  session->responses = malloc(40 * sizeof(char) + 1);
+  if (!session->requests || !session->responses) {  // FIXME if alloc fails, might be freeing NULL
     free(session->requests);
     free(session->responses);
     free(session);
@@ -93,6 +93,6 @@ Session* dequeue_session(SessionQueue* queue) {
   queue->size--;
   pthread_cond_signal(&queue->full);
   pthread_mutex_unlock(&queue->mutex);
-  
+
   return session;
 }

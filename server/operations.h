@@ -24,7 +24,7 @@ int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols);
 /// @param xs Array of rows of the seats to reserve.
 /// @param ys Array of columns of the seats to reserve.
 /// @return 0 if the reservation was created successfully, 1 otherwise.
-int ems_reserve(unsigned int event_id, size_t num_seats, size_t *xs, size_t *ys);
+int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys);
 
 /// Prepares information about given event. This list must NOT be freed by the caller.
 /// @param event_id Id of the event to print.

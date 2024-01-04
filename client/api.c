@@ -1,19 +1,19 @@
 #include "api.h"
 
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <unistd.h>
 #include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
-#include "common/io.h"
 #include "common/constants.h"
+#include "common/io.h"
 
 int req_fd = -1;
 int resp_fd = -1;
-char const *req_pipe;
-char const *resp_pipe;
+char const* req_pipe;
+char const* resp_pipe;
 unsigned int id;
 
 enum OPCODES {
@@ -35,12 +35,12 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
   if (mkfifo(resp_pipe_path, 0640)) {
     fprintf(stderr, "Failed to create response pipes");
   }
-  if (mkfifo(req_pipe_path, 0640)){
+  if (mkfifo(req_pipe_path, 0640)) {
     fprintf(stderr, "Failed to create requests pipe");
   }
 
   printf("Sending setup request %s %s\n", req_pipe_path, resp_pipe_path);
-  void *message = malloc(sizeof(int) + MAX_BUFFER_SIZE * 2);
+  void* message = malloc(sizeof(int) + MAX_BUFFER_SIZE * 2);
   if (message == NULL) {
     perror("Memory allocation error");
     return 1;
@@ -76,7 +76,7 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
   return 0;
 }
 
-int ems_quit(void) { 
+int ems_quit(void) {
   int code = QUIT;
   write(req_fd, &code, sizeof(int));
   close(req_fd);
@@ -108,7 +108,7 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
   write(req_fd, &num_seats, sizeof(size_t));
   write(req_fd, xs, sizeof(size_t) * num_seats);
   write(req_fd, ys, sizeof(size_t) * num_seats);
-  //Checks for response
+  // Checks for response
   read(resp_fd, &code, sizeof(int));
   if (code == 0) {
     return 0;
@@ -126,8 +126,7 @@ int ems_show(int out_fd, unsigned int event_id) {
   write(req_fd, &event_id, sizeof(unsigned int));
   read(resp_fd, &code, sizeof(int));
   if (code == 0) {
-    if(read(resp_fd, &num_rows, sizeof(size_t)) == -1||
-    read(resp_fd, &num_cols, sizeof(size_t)) == -1) {
+    if (read(resp_fd, &num_rows, sizeof(size_t)) == -1 || read(resp_fd, &num_cols, sizeof(size_t)) == -1) {
       perror("Error reading dimensions from the response pipe");
       return 1;
     }
@@ -137,7 +136,7 @@ int ems_show(int out_fd, unsigned int event_id) {
       return 1;
     }
 
-    //Safe read of seating data from pipe
+    // Safe read of seating data from pipe
     size_t total_bytes = sizeof(unsigned int) * num_rows * num_cols;
     size_t bytes_read = 0;
     while (bytes_read < total_bytes) {
@@ -154,7 +153,7 @@ int ems_show(int out_fd, unsigned int event_id) {
         bytes_read += (size_t)result;
       }
     }
-  
+
     for (size_t i = 1; i <= num_rows; i++) {
       for (size_t j = 1; j <= num_cols; j++) {
         char buffer[16];
@@ -183,8 +182,7 @@ int ems_show(int out_fd, unsigned int event_id) {
     }
     free(seats);
     return 0;
-  } 
-  else {
+  } else {
     return 1;
   }
   return 1;
@@ -225,13 +223,11 @@ int ems_list_events(int out_fd) {
         return 1;
       }
 
-
       if (print_uint(out_fd, event_ids[i])) {
         perror("Error writing event id to file descriptor\n");
         return 1;
       }
       write(out_fd, "\n", 1);
-
     }
     free(event_ids);
     return 0;
