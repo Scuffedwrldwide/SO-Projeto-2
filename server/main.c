@@ -122,7 +122,7 @@ int main(int argc, char* argv[]) {
   int register_fd;
   while (server_running) {
     if (list_all) list_all_info();
-
+    if (server_running == 0) break; // In case signal comes in during list_all_info
     while (server_running) {
       register_fd = open(argv[1], O_RDWR);
       if (register_fd == -1) {
