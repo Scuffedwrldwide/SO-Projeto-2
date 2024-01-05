@@ -71,7 +71,7 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
     return 1;
   }
   printf("opened request and response pipes\n");
-  //THIS IS DUMB AS
+  
   req_pipe = malloc(strlen(req_pipe_path) + 1);
   resp_pipe = malloc(strlen(resp_pipe_path) + 1);
   strcpy(req_pipe, req_pipe_path);
@@ -92,7 +92,6 @@ int ems_quit(void) {
 }
 
 int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols) {
-  //TODO: send create request to the server (through the request pipe) and wait for the response (through the response pipe)
   printf("sending create request\n");
   int code = CREATE;
   write(req_fd, &code, sizeof(int));
@@ -111,7 +110,6 @@ int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols) {
 }
 
 int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys) {
-  //TODO: send reserve request to the server (through the request pipe) and wait for the response (through the response pipe)
   printf("sending reserve request\n");
   int code = RESERVE;
   write(req_fd, &code, sizeof(int));
@@ -119,6 +117,7 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
   write(req_fd, &num_seats, sizeof(size_t));
   write(req_fd, xs, sizeof(size_t) * num_seats);
   write(req_fd, ys, sizeof(size_t) * num_seats);
+  //Checks for response
   read(resp_fd, &code, sizeof(int));
   if (code == 0) {
     printf("reserve successful\n");
@@ -139,11 +138,34 @@ int ems_show(int out_fd, unsigned int event_id) {
   write(req_fd, &event_id, sizeof(unsigned int));
   read(resp_fd, &code, sizeof(int));
   if (code == 0) {
-    //TODO SAFE READS
-    read(resp_fd, &num_rows, sizeof(size_t));
-    read(resp_fd, &num_cols, sizeof(size_t));
+    if(read(resp_fd, &num_rows, sizeof(size_t)) ||
+    read(resp_fd, &num_cols, sizeof(size_t))) {
+      perror("Error reading dimensions from the response pipe");
+      return 1;
+    }
     seats = malloc(sizeof(unsigned int) * num_rows * num_cols);
-    read(resp_fd, seats, sizeof(unsigned int) * num_rows * num_cols);
+    if (seats == NULL) {
+      perror("Memory allocation error");
+      return 1;
+    }
+
+    //Safe read of seating data from pipe
+    size_t total_bytes = sizeof(unsigned int) * num_rows * num_cols;
+    size_t bytes_read = 0;
+    while (bytes_read < total_bytes) {
+      ssize_t result = read(resp_fd, seats + bytes_read / sizeof(unsigned int), total_bytes - bytes_read);
+      if (result < 0) {
+        perror("Error reading seating arrangement from the response pipe");
+        free(seats);
+        return 1;
+      } else if (result == 0) {
+        fprintf(stderr, "Error: Unexpected end of file while reading seating arrangement\n");
+        free(seats);
+        return 1;
+      } else {
+        bytes_read += result;
+      }
+    }
   
     for (size_t i = 1; i <= num_rows; i++) {
       for (size_t j = 1; j <= num_cols; j++) {
@@ -173,44 +195,15 @@ int ems_show(int out_fd, unsigned int event_id) {
     }
     free(seats);
     return 0;
-  } else {
+  } 
+  else {
     printf("show failed\n");
     return 1;
   }
-
-  /* OLD CODE FROM SERVER
-  for (size_t i = 1; i <= event->rows; i++) {
-    for (size_t j = 1; j <= event->cols; j++) {
-      char buffer[16];
-      sprintf(buffer, "%u", event->data[seat_index(event, i, j)]);
-
-      if (print_str(out_fd, buffer)) {
-        perror("Error writing to file descriptor");
-        pthread_mutex_unlock(&event->mutex);
-        return 1;
-      }
-
-      if (j < event->cols) {
-        if (print_str(out_fd, " ")) {
-          perror("Error writing to file descriptor");
-          pthread_mutex_unlock(&event->mutex);
-          return 1;
-        }
-      }
-    }
-
-    if (print_str(out_fd, "\n")) {
-      perror("Error writing to file descriptor");
-      pthread_mutex_unlock(&event->mutex);
-      return 1;
-    }
-  }
-  */
   return 1;
 }
 
 int ems_list_events(int out_fd) {
-  //TODO: send list request to the server (through the request pipe) and wait for the response (through the response pipe)
   printf("sending list request\n");
   int code = LIST;
   write(req_fd, &code, sizeof(int));

@@ -32,7 +32,7 @@ void sigint_handler(int sign) {
   pthread_cond_broadcast(&queue->empty);
   fprintf(stderr, "\nReceived SIGINT. Terminating...\n");
 }
-
+// Handler for SIGUSR1
 void sigusr1_handler(int sign) {
   printf("\nReceived SIGUSR1. Listing all events...\n");
   list_all = 1;
@@ -93,8 +93,7 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  //TODO: Intialize server, create worker threads
-  mkfifo(argv[1], 0666); // Create named pipe for conection requests
+  mkfifo(argv[1], 0666); // Create named pipe for connection requests
   if (errno == EEXIST) {
     fprintf(stderr, "Named pipe already exists.\n");  
   } 
@@ -128,7 +127,7 @@ int main(int argc, char* argv[]) {
     if (list_all) list_all_info();
 
     while (server_running) {
-      register_fd = open(argv[1], O_RDONLY);
+      register_fd = open(argv[1], O_RDWR);
       if (register_fd == -1) {
         if (errno == EINTR) {
           printf("Interrupted by signal\n");
@@ -140,6 +139,7 @@ int main(int argc, char* argv[]) {
       }
       break;
     }
+    //Process connection request
     int code = 0;
     char req_pipe_path[MAX_BUFFER_SIZE] = {0};
     char resp_pipe_path[MAX_BUFFER_SIZE] = {0};
@@ -158,7 +158,7 @@ int main(int argc, char* argv[]) {
     printf("Connection request received with code %d. %d connections already active\n", code, active_sessions);
     if (code != 1) {
       fprintf(stderr, "Invalid connection request\n");
-      continue; //
+      continue; 
     }
     printf("Connection request received\n");
     bytesRead = read(register_fd, req_pipe_path, MAX_BUFFER_SIZE);
@@ -175,6 +175,7 @@ int main(int argc, char* argv[]) {
     }
     printf("Response pipe path received\n");
     printf("Response pipe path: %s\n", resp_pipe_path);
+    //Creates session
     Session *session = create_session(active_sessions, req_pipe_path, resp_pipe_path);
     active_sessions++;
     printf("Active sessions: %d\n", active_sessions);
@@ -185,16 +186,19 @@ int main(int argc, char* argv[]) {
     printf("Session %d created", session->id);
     if (active_sessions > MAX_SESSIONS) { printf(". Waiting for earlier sessions to finish");}
     printf("\n");
+    //Queues session
     if (enqueue_session(queue, session) != 0) {
       fprintf(stderr, "Failed to enqueue session\n");
       destroy_session(session);
       break;
     }
+
     close(register_fd);
   }
   close(register_fd);
   printf("Server terminating\n");
-  //TODO: Close Server
+  
+  // Wait for all worker threads to terminate
   for (int i = 0; i < MAX_SESSIONS; i++) {
     printf("Joining thread %d\n", i);
     pthread_join(worker_threads[i], NULL);
@@ -403,7 +407,7 @@ int session_worker(Session* session) {
         int ret_val;
         size_t num_events;
         unsigned int* event_ids;
-        ret_val = ems_list_events(&num_events, &event_ids); //This fucntion allocates memory for event_ids
+        ret_val = ems_list_events(&num_events, &event_ids); //This function allocates memory for event_ids
         write(responses, &ret_val, sizeof(int));
         if (ret_val == 0) { //If it returns 1 or num_events == 0, then there was no allocation
           if (write(responses, &num_events, sizeof(size_t)) != sizeof(size_t)) {

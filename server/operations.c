@@ -34,7 +34,7 @@ static size_t seat_index(struct Event* event, size_t row, size_t col) { return (
 
 volatile sig_atomic_t terminate_ems = 0;
 
-// Função de tratamento de sinal
+// Handles SIGTERM
 void sigterm_handler(int sign) {
   fprintf(stderr, "Received SIGTERM. Terminating...\n");
   terminate_ems = 1;
