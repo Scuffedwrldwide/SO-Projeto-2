@@ -163,7 +163,7 @@ int ems_show(int out_fd, unsigned int event_id) {
         free(seats);
         return 1;
       } else {
-        bytes_read += result;
+        bytes_read += (size_t)result;
       }
     }
   
@@ -228,7 +228,7 @@ int ems_list_events(int out_fd) {
       return 0;
     }
     printf("num_events: %lu\n", num_events);
-    if (read(resp_fd, event_ids, sizeof(unsigned int) * num_events) != sizeof(unsigned int) * num_events) {
+    if (read(resp_fd, event_ids, sizeof(unsigned int) * num_events) != (ssize_t)(sizeof(unsigned int) * num_events)) {
       fprintf(stderr, "Failed to read event ids\n");
       free(event_ids);
       return 1;

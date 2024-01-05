@@ -36,6 +36,10 @@ volatile sig_atomic_t terminate_ems = 0;
 
 // Handles SIGTERM
 void sigterm_handler(int sign) {
+  if(sign != SIGTERM) {
+    fprintf(stderr, "Received unexpected signal %d\n", sign);
+    return;
+  }
   fprintf(stderr, "Received SIGTERM. Terminating...\n");
   terminate_ems = 1;
 }

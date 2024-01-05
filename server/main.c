@@ -25,6 +25,10 @@ volatile sig_atomic_t list_all = 0; // Flag to trigger list all events
 
 // Handler for SIGINT
 void sigint_handler(int sign) {
+  if(sign != SIGINT) {
+    fprintf(stderr, "Received unexpected signal %d\n", sign);
+    return;
+  }
   server_running = 0;
   pthread_mutex_lock(&queue->mutex);
   queue->shutdown = 1;
@@ -34,6 +38,10 @@ void sigint_handler(int sign) {
 }
 // Handler for SIGUSR1
 void sigusr1_handler(int sign) {
+  if(sign != SIGUSR1) {
+    fprintf(stderr, "Received unexpected signal %d\n", sign);
+    return;
+  }
   printf("\nReceived SIGUSR1. Listing all events...\n");
   list_all = 1;
 }
@@ -337,7 +345,7 @@ int session_worker(Session* session) {
           close(responses);
           return 1;
         }
-        if (read(requests, xs, sizeof(size_t) * num_seats) != (ssize_t)sizeof(size_t) * num_seats) {
+        if (read(requests, xs, sizeof(size_t) * num_seats) != (ssize_t)(sizeof(size_t) * num_seats)) {
           fprintf(stderr, "Failed to read xs (%d)\n", session->id);
           free(xs);
           free(ys);
@@ -345,7 +353,7 @@ int session_worker(Session* session) {
           close(responses);
           return 1;
         }
-        if (read(requests, ys, sizeof(size_t) * num_seats) != (ssize_t)sizeof(size_t) * num_seats) {
+        if (read(requests, ys, sizeof(size_t) * num_seats) != (ssize_t)(sizeof(size_t) * num_seats)) {
           fprintf(stderr, "Failed to read ys (%d)\n", session->id);
           free(xs);
           free(ys);
@@ -393,7 +401,7 @@ int session_worker(Session* session) {
             close(responses);
             return 1;
           }
-          if (write(responses, seats, sizeof(unsigned int) * num_rows * num_columns) != sizeof(unsigned int) * num_rows * num_columns) {
+          if (write(responses, seats, sizeof(unsigned int) * num_rows * num_columns) != (ssize_t)(sizeof(unsigned int) * num_rows * num_columns)) {
             fprintf(stderr, "Failed to write seats (%d)\n", session->id);
             close(requests);
             close(responses);
@@ -418,7 +426,7 @@ int session_worker(Session* session) {
             close(responses);
             return 1;
           }
-          if (write(responses, event_ids, sizeof(unsigned int) * num_events) != sizeof(unsigned int) * num_events) {
+          if (write(responses, event_ids, sizeof(unsigned int) * num_events) != (ssize_t)(sizeof(unsigned int) * num_events)) {
             fprintf(stderr, "Failed to write event ids (%d)\n", session->id);
             if (event_ids) { free(event_ids);
               }
